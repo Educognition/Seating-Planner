@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Seating Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom Off-White Background */
+        body {
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            color: #1e293b; /* Tailwind slate-800 */
+        }
+        
+        /* 1080p Workspace Scaling */
+        #workspace-wrapper {
+            width: 100%;
+            height: calc(100vh - 200px);
+            overflow: auto;
+            background-color: #e2e8f0;
+            border-radius: 0.5rem;
+            position: relative;
+            box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+        }
+
+        #canvas-1080p {
+            width: 1920px;
+            height: 1080px;
+            background-color: #ffffff;
+            position: relative;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 40px 40px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            transform-origin: top left;
+        }
+
+        /* Draggable Desk Styles */
+        .desk-card {
+            position: absolute;
+            width: 200px;
+            min-height: 100px;
+            background: white;
+            border: 2px solid #2563eb; /* Royal Blue */
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            cursor: grab;
+            user-select: none;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            transition: box-shadow 0.2s, transform 0.1s;
+            padding-bottom: 8px;
+        }
+        
+        .desk-card:active {
+            cursor: grabbing;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2);
+            transform: scale(1.02);
+            z-index: 50;
+        }
+
+        .desk-header {
+            background: #2563eb; /* Royal Blue */
+            color: white;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 0.875rem;
+            border-top-left-radius: 0.375rem;
+            border-top-right-radius: 0.375rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .desk-body {
+            padding: 8px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .student-name {
+            font-weight: 700;
+            font-size: 1.125rem;
+            color: #1e293b;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        
+        /* Checkbox styling */
+        .custom-checkbox {
+            appearance: none;
+            background-color: #fff;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.15em;
+            transform: translateY(-0.075em);
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+        }
+
+        .custom-checkbox::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em #2563eb;
+            background-color: #2563eb;
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .custom-checkbox:checked::before {
+            transform: scale(1);
+        }
+        
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans overflow-hidden">
+
+    <!-- View 1: Launch Page -->
+    <div id="view-launch" class="flex-1 flex flex-col items-center justify-center h-full space-y-8 transition-opacity duration-500">
+        <div class="text-center space-y-4">
+            <div class="inline-block p-6 rounded-full bg-blue-100 mb-4">
+                <i class="fa-solid fa-users-rectangle text-6xl text-blue-600"></i>
+            </div>
+            <h1 class="text-5xl font-extrabold text-slate-800 tracking-tight">Seating Planner</h1>
+            <p class="text-xl text-slate-600 max-w-lg mx-auto">Create and manage your classroom seating arrangements easily with smart grouping and drag-and-drop controls.</p>
+        </div>
+        
+        <div id="launch-actions" class="flex space-x-6">
+            <button onclick="showLoadMenu()" class="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white text-xl font-bold rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+                <i class="fa-solid fa-folder-open mr-3"></i> Load Saved Plan
+            </button>
+            <button onclick="createNewPlan()" class="px-8 py-4 bg-pink-500 hover:bg-pink-600 text-white text-xl font-bold rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+                <i class="fa-solid fa-plus mr-3"></i> Create New Plan
+            </button>
+        </div>
+
+        <div id="load-menu" class="hidden w-full max-w-md bg-white rounded-2xl shadow-xl p-6 text-left border border-slate-200">
+            <h3 class="font-bold text-xl mb-4 text-slate-800 border-b pb-2">Select a Plan</h3>
+            <ul id="saved-plans-list" class="space-y-2 max-h-60 overflow-y-auto pr-2">
+                <!-- Populated by JS -->
+            </ul>
+            <div class="mt-6 text-center">
+                <button onclick="hideLoadMenu()" class="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View 2: Main App -->
+    <div id="view-app" class="hidden flex-1 flex flex-col h-full opacity-0 transition-opacity duration-500">
+        
+        <!-- Header -->
+        <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center z-10 shrink-0">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-users-rectangle text-2xl"></i>
+                <h1 class="text-2xl font-bold flex items-center">
+                    Classroom Seating Planner
+                    <span id="current-plan-display" class="hidden ml-4 px-3 py-1 bg-blue-500 text-sm font-semibold rounded-full border border-blue-400"></span>
+                </h1>
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="exportToCSV()" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 rounded text-sm font-semibold transition">
+                    <i class="fa-solid fa-download mr-2"></i> Export CSV
+                </button>
+                <button onclick="copyToClipboard()" class="px-4 py-2 bg-pink-500 hover:bg-pink-600 rounded text-sm font-semibold transition shadow">
+                    <i class="fa-solid fa-copy mr-2"></i> Copy for Google Docs
+                </button>
+                <button onclick="switchView('view-launch')" class="px-4 py-2 bg-transparent border border-white hover:bg-white hover:text-blue-600 rounded text-sm font-semibold transition">
+                    Exit
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Layout -->
+        <div class="flex flex-1 overflow-hidden">
+            
+            <!-- Sidebar: Student & Settings -->
+            <aside class="w-[420px] bg-white shadow-xl flex flex-col h-full z-10 shrink-0 border-r border-slate-200">
+                
+                <!-- Tabs -->
+                <div class="flex border-b text-sm font-semibold">
+                    <button id="tab-students" onclick="switchSidebarTab('students')" class="flex-1 py-3 text-blue-600 border-b-2 border-blue-600">Students</button>
+                    <button id="tab-settings" onclick="switchSidebarTab('settings')" class="flex-1 py-3 text-slate-500 hover:text-slate-700">Generation Settings</button>
+                </div>
+
+                <!-- Tab Content: Students -->
+                <div id="content-students" class="flex-1 flex flex-col overflow-hidden">
+                    <div class="p-4 border-b bg-slate-50">
+                        <h3 class="font-bold text-slate-700 mb-3"><i class="fa-solid fa-user-plus mr-2"></i>Add Single Student</h3>
+                        <form id="add-student-form" class="space-y-3" onsubmit="addStudent(event)">
+                            <div class="flex gap-2">
+                                <input type="text" id="stu-name" placeholder="Student Name" required class="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                                <select id="stu-gender" class="w-28 p-2 border rounded outline-none text-sm">
+                                    <option value="M">He/Boy</option>
+                                    <option value="F">She/Girl</option>
+                                    <option value="O">They/Them</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="w-full py-2 bg-slate-800 text-white rounded font-bold hover:bg-slate-700 transition text-sm">Add Student</button>
+                        </form>
+                    </div>
+
+                    <!-- Bulk Import Section -->
+                    <div class="p-4 border-b bg-white">
+                        <h3 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-paste mr-2"></i>Bulk Import</h3>
+                        <textarea id="bulk-names" rows="3" placeholder="Paste a list of names here (one per line)..." class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"></textarea>
+                        <button onclick="bulkAddStudents()" class="w-full mt-2 py-2 bg-slate-200 text-slate-700 rounded font-bold hover:bg-slate-300 transition text-sm">Import Names</button>
+                    </div>
+                    
+                    <!-- Student List -->
+                    <div class="flex-1 overflow-y-auto p-4 bg-slate-50 relative pb-20">
+                        <div class="flex justify-between items-center mb-2 sticky top-0 bg-slate-50 py-1 z-10">
+                            <h3 class="font-bold text-slate-700">Class Roster (<span id="student-count">0</span>)</h3>
+                        </div>
+                        <ul id="student-list" class="space-y-3">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Settings -->
+                <div id="content-settings" class="hidden flex-1 overflow-y-auto p-4 bg-slate-50 space-y-6">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-2">Arrangement Strategy</label>
+                        <select id="setting-strategy" class="w-full p-2 border rounded bg-white outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="random">True Random</option>
+                            <option value="alphabetical">Sort Alphabetically (A-Z)</option>
+                            <option value="reverse-alphabetical">Sort Alphabetically (Z-A)</option>
+                            <option value="alternating-alphabetical">Alternating Alphabetical</option>
+                            <option value="alternating-gender">Alternating Gender</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Note: Constraints ("Sit with" / "Do not sit with") are always respected within groups.</p>
+                    </div>
+
+                    <div class="border-t pt-4">
+                        <label class="font-bold text-slate-700 block mb-2">Desk Inventory</label>
+                        <p class="text-xs text-slate-500 mb-2">Specify exactly how many of each desk size you have in your classroom.</p>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div class="flex justify-between items-center bg-white p-2 border rounded">
+                                <span>1-Seat</span> <input type="number" id="qty-1" min="0" value="0" onchange="updateDeskConfig(1, this.value)" class="w-12 border rounded text-center outline-none">
+                            </div>
+                            <div class="flex justify-between items-center bg-white p-2 border rounded">
+                                <span>2-Seat</span> <input type="number" id="qty-2" min="0" value="0" onchange="updateDeskConfig(2, this.value)" class="w-12 border rounded text-center outline-none">
+                            </div>
+                            <div class="flex justify-between items-center bg-white p-2 border rounded">
+                                <span>3-Seat</span> <input type="number" id="qty-3" min="0" value="0" onchange="updateDeskConfig(3, this.value)" class="w-12 border rounded text-center outline-none">
+                            </div>
+                            <div class="flex justify-between items-center bg-white p-2 border rounded">
+                                <span>4-Seat</span> <input type="number" id="qty-4" min="0" value="0" onchange="updateDeskConfig(4, this.value)" class="w-12 border rounded text-center outline-none">
+                            </div>
+                            <div class="flex justify-between items-center bg-white p-2 border rounded">
+                                <span>5-Seat</span> <input type="number" id="qty-5" min="0" value="0" onchange="updateDeskConfig(5, this.value)" class="w-12 border rounded text-center outline-none">
+                            </div>
+                            <div class="flex justify-between items-center bg-white p-2 border rounded">
+                                <span>6-Seat</span> <input type="number" id="qty-6" min="0" value="0" onchange="updateDeskConfig(6, this.value)" class="w-12 border rounded text-center outline-none">
+                            </div>
+                        </div>
+                        <p id="seat-counter" class="text-xs font-semibold text-slate-500 mt-2 text-right">Total Seats: 0 | Students: 0</p>
+                    </div>
+                    
+                    <div class="border-t pt-4">
+                        <label class="font-bold text-slate-700 block mb-2">Layout Presets</label>
+                        <div class="flex space-x-2 mb-2">
+                            <button onclick="savePreset()" class="flex-1 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-semibold transition">Save Current Layout</button>
+                        </div>
+                        <select id="preset-selector" class="w-full p-2 border rounded bg-white outline-none">
+                            <option value="">-- Select a preset to load --</option>
+                        </select>
+                        <button onclick="loadPreset()" class="w-full mt-2 py-2 border border-blue-600 text-blue-600 hover:bg-blue-50 rounded text-sm font-semibold transition">Load Preset</button>
+                    </div>
+
+                    <div class="pt-2 mt-auto pb-4">
+                        <button onclick="generateSeating()" class="w-full py-4 bg-pink-500 hover:bg-pink-600 text-white text-xl font-bold rounded shadow-lg transition-transform transform hover:-translate-y-1">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Generate / Re-roll
+                        </button>
+                    </div>
+                </div>
+
+            </aside>
+
+            <!-- Main Canvas Area -->
+            <main class="flex-1 p-4 flex flex-col">
+                <div class="mb-2 flex justify-between items-center text-slate-600">
+                    <div>
+                        <i class="fa-solid fa-circle-info mr-1"></i> Drag desks to arrange
+                    </div>
+                    <div>
+                        <button onclick="zoom(0.1)" class="p-1 hover:text-blue-600"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                        <button onclick="zoom(-0.1)" class="p-1 hover:text-blue-600"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                        <button onclick="resetZoom()" class="p-1 hover:text-blue-600"><i class="fa-solid fa-compress"></i> Fit</button>
+                    </div>
+                </div>
+                
+                <div id="workspace-wrapper">
+                    <div id="canvas-1080p">
+                        <!-- Desks generated here -->
+                        <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-blue-100/50 to-transparent pointer-events-none flex justify-center items-start pt-4">
+                            <span class="text-blue-800/50 font-bold uppercase tracking-widest text-2xl border-b-2 border-blue-800/30 pb-1">Front of Class (Teacher)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Notification area -->
+                <div id="notification" class="fixed bottom-4 right-4 bg-slate-800 text-white px-6 py-3 rounded shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+                    Message here
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals and Overlays -->
+    <div id="constraint-overlay" class="fixed inset-0 bg-slate-900/50 z-50 hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <h3 class="font-bold text-lg text-slate-800">Manage Rules: <span id="cr-student-name" class="text-blue-600"></span></h3>
+                <button onclick="closeConstraintModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            
+            <div class="p-4 flex gap-2 border-b">
+                <button id="cr-tab-avoid" onclick="switchCrTab('avoid')" class="flex-1 py-2 text-sm font-bold rounded-lg bg-red-100 text-red-700 transition">Do not sit with</button>
+                <button id="cr-tab-sitWith" onclick="switchCrTab('sitWith')" class="flex-1 py-2 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 transition">Must sit with</button>
+                <button id="cr-tab-teacher" onclick="switchCrTab('teacher')" class="flex-1 py-2 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 transition">Position</button>
+            </div>
+
+            <div id="cr-content-list" class="overflow-y-auto p-2 flex-1">
+                <!-- Checkboxes populated here -->
+            </div>
+
+            <div id="cr-content-teacher" class="hidden p-6 text-center space-y-4">
+                <i class="fa-solid fa-person-chalkboard text-4xl text-blue-500"></i>
+                <h4 class="font-bold text-lg text-slate-700">Sit close to teacher</h4>
+                <p class="text-sm text-slate-500">If enabled, the algorithm will attempt to place this student in the front row during generation.</p>
+                <label class="inline-flex items-center cursor-pointer mt-4 bg-slate-100 px-4 py-2 rounded-lg hover:bg-slate-200 transition">
+                    <input type="checkbox" id="cr-teacher-toggle" class="custom-checkbox mr-3" onchange="toggleTeacherProximity()">
+                    <span class="font-bold text-slate-700">Enable Front Row Seating</span>
+                </label>
+            </div>
+
+            <div class="p-4 border-t bg-slate-50 rounded-b-xl text-right">
+                <button onclick="closeConstraintModal()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let students = [];
+        let deskConfig = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }; // Quantity of each size
+        
+        let activeDesks = []; // { deskId, studentIds, x, y, capacity }
+        let presets = {};
+        let currentPlanName = null;
+        
+        // Modal State
+        let crCurrentStudentId = null;
+        let crCurrentTab = 'avoid'; // 'avoid' | 'sitWith' | 'teacher'
+
+        // --- Canvas & Drag State ---
+        const canvas = document.getElementById('canvas-1080p');
+        const wrapper = document.getElementById('workspace-wrapper');
+        let currentZoom = 1;
+        let isDragging = false;
+        let dragTarget = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        // --- Initialization ---
+        function init() {
+            fitZoomToScreen();
+            window.addEventListener('resize', fitZoomToScreen);
+        }
+
+        // --- Storage & Flow ---
+        function getSavedPlans() {
+            let plans = JSON.parse(localStorage.getItem('seatingPlannerAllStates')) || {};
+            const legacyState = localStorage.getItem('seatingPlannerState');
+            if (legacyState) {
+                plans['Legacy Plan'] = JSON.parse(legacyState);
+                localStorage.removeItem('seatingPlannerState');
+                localStorage.setItem('seatingPlannerAllStates', JSON.stringify(plans));
+            }
+            return plans;
+        }
+
+        function saveState() {
+            if (!currentPlanName) return;
+            const plans = getSavedPlans();
+            plans[currentPlanName] = { students, activeDesks, presets, deskConfig };
+            localStorage.setItem('seatingPlannerAllStates', JSON.stringify(plans));
+        }
+
+        function createNewPlan() {
+            const name = prompt("Enter a name for your new seating plan (e.g., 'Period 1', 'Math Class'):");
+            if (!name) return;
+
+            const plans = getSavedPlans();
+            if (plans[name] && !confirm(`A plan named '${name}' already exists. Overwrite?`)) {
+                return;
+            }
+
+            currentPlanName = name;
+            students = [];
+            activeDesks = [];
+            presets = {};
+            deskConfig = { 1: 0, 2: 0, 3: 0, 4: 6, 5: 0, 6: 0 }; 
+            saveState();
+            
+            const display = document.getElementById('current-plan-display');
+            display.innerText = currentPlanName;
+            display.classList.remove('hidden');
+
+            syncDeskInputs();
+            renderStudentList();
+            updatePresetDropdown();
+            renderCanvas();
+            switchView('view-app');
+        }
+
+        function showLoadMenu() {
+            const plans = getSavedPlans();
+            const list = document.getElementById('saved-plans-list');
+            list.innerHTML = '';
+            
+            const planNames = Object.keys(plans);
+            
+            if (planNames.length === 0) {
+                list.innerHTML = '<li class="text-slate-500 italic text-sm py-2">No saved plans found. Create a new one!</li>';
+            } else {
+                planNames.forEach(name => {
+                    const li = document.createElement('li');
+                    li.className = "flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 cursor-pointer transition";
+                    
+                    li.innerHTML = `
+                        <div class="flex-1 font-semibold text-slate-700" onclick="loadSpecificPlan('${name.replace(/'/g, "\\'")}')">
+                            <i class="fa-solid fa-file-lines text-blue-500 mr-2"></i> ${name}
+                        </div>
+                        <button onclick="deletePlan('${name.replace(/'/g, "\\'")}', event)" class="text-slate-400 hover:text-red-500 p-2 transition">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    `;
+                    list.appendChild(li);
+                });
+            }
+
+            document.getElementById('launch-actions').classList.add('hidden');
+            document.getElementById('load-menu').classList.remove('hidden');
+        }
+
+        function hideLoadMenu() {
+            document.getElementById('load-menu').classList.add('hidden');
+            document.getElementById('launch-actions').classList.remove('hidden');
+        }
+
+        function loadSpecificPlan(name) {
+            const plans = getSavedPlans();
+            if (plans[name]) {
+                currentPlanName = name;
+                const state = plans[name];
+                
+                students = (state.students || []).map(s => ({
+                    ...s,
+                    avoid: s.avoid || [],
+                    sitWith: s.sitWith || [],
+                    frontRow: s.frontRow || false
+                }));
+
+                deskConfig = state.deskConfig || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+                
+                activeDesks = (state.activeDesks || []).map(d => ({
+                    ...d,
+                    studentIds: d.studentIds || (d.studentId ? [d.studentId] : [])
+                }));
+                
+                presets = state.presets || {};
+                
+                const display = document.getElementById('current-plan-display');
+                display.innerText = currentPlanName;
+                display.classList.remove('hidden');
+
+                syncDeskInputs();
+                renderStudentList();
+                updatePresetDropdown();
+                renderCanvas();
+                switchView('view-app');
+                showNotification(`Loaded plan: ${name}`);
+            }
+        }
+
+        function deletePlan(name, event) {
+            event.stopPropagation();
+            if(confirm(`Are you sure you want to completely delete the plan '${name}'?`)) {
+                const plans = getSavedPlans();
+                delete plans[name];
+                localStorage.setItem('seatingPlannerAllStates', JSON.stringify(plans));
+                showLoadMenu();
+            }
+        }
+
+        // --- Desk Inventory Management ---
+        function updateDeskConfig(size, value) {
+            deskConfig[size] = parseInt(value) || 0;
+            saveState();
+            updateSeatCounter();
+        }
+
+        function syncDeskInputs() {
+            for (let i = 1; i <= 6; i++) {
+                const el = document.getElementById(`qty-${i}`);
+                if (el) el.value = deskConfig[i] || 0;
+            }
+            updateSeatCounter();
+        }
+
+        function updateSeatCounter() {
+            let total = 0;
+            for (let i = 1; i <= 6; i++) {
+                total += (deskConfig[i] || 0) * i;
+            }
+            
+            const counter = document.getElementById('seat-counter');
+            if (counter) {
+                counter.innerText = `Total Seats: ${total} | Students: ${students.length}`;
+                if (total < students.length) {
+                    counter.className = "text-xs font-bold text-red-500 mt-2 text-right";
+                } else {
+                    counter.className = "text-xs font-semibold text-slate-500 mt-2 text-right";
+                }
+            }
+        }
+
+        // --- View Switching ---
+        function switchView(viewId) {
+            document.getElementById('view-launch').classList.add('hidden');
+            document.getElementById('view-launch').classList.remove('opacity-100');
+            document.getElementById('view-app').classList.add('hidden');
+            document.getElementById('view-app').classList.remove('opacity-100');
+
+            const target = document.getElementById(viewId);
+            target.classList.remove('hidden');
+            setTimeout(() => {
+                target.classList.add('opacity-100');
+            }, 10);
+            
+            if(viewId === 'view-app') {
+                setTimeout(fitZoomToScreen, 100);
+            } else if (viewId === 'view-launch') {
+                hideLoadMenu();
+            }
+        }
+
+        function switchSidebarTab(tab) {
+            document.getElementById('tab-students').classList.replace('text-blue-600', 'text-slate-500');
+            document.getElementById('tab-students').classList.remove('border-b-2', 'border-blue-600');
+            document.getElementById('tab-settings').classList.replace('text-blue-600', 'text-slate-500');
+            document.getElementById('tab-settings').classList.remove('border-b-2', 'border-blue-600');
+            
+            document.getElementById('content-students').classList.add('hidden');
+            document.getElementById('content-settings').classList.add('hidden');
+
+            document.getElementById('tab-' + tab).classList.replace('text-slate-500', 'text-blue-600');
+            document.getElementById('tab-' + tab).classList.add('border-b-2', 'border-blue-600');
+            document.getElementById('content-' + tab).classList.remove('hidden');
+        }
+
+        // --- Student Management ---
+        function addStudent(e) {
+            e.preventDefault();
+            const name = document.getElementById('stu-name').value;
+            const gender = document.getElementById('stu-gender').value;
+
+            let finalName = name.trim();
+            let counter = 1;
+
+            // Simple duplicate checking logic
+            while(students.some(s => s.name.toLowerCase() === finalName.toLowerCase())) {
+                finalName = `${name.trim()} ${counter}`;
+                counter++;
+            }
+
+            const newId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+
+            students.push({ id: newId, name: finalName, gender, avoid: [], sitWith: [] });
+            
+            e.target.reset();
+            
+            renderStudentList();
+            updateSeatCounter();
+            saveState();
+            showNotification(`${finalName} added to roster.`);
+        }
+
+        async function bulkAddStudents() {
+            const textarea = document.getElementById('bulk-names');
+            const text = textarea.value;
+            if (!text.trim()) return;
+
+            // Split by new line, trim whitespace, and filter out empty lines
+            const names = text.split(/\r?\n/).map(n => n.trim()).filter(n => n);
+            let addedCount = 0;
+            
+            const btn = document.querySelector('button[onclick="bulkAddStudents()"]');
+            const originalBtnText = btn.innerText;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Importing...';
+            btn.disabled = true;
+
+            for (let rawName of names) {
+                let finalName = rawName;
+                let counter = 1;
+
+                // Simple duplicate checking logic
+                while (students.some(s => s.name.toLowerCase() === finalName.toLowerCase())) {
+                    finalName = `${rawName} ${counter}`;
+                    counter++;
+                }
+                
+                // Attempt to guess gender from first name
+                let guessedGender = 'O'; // Default to They/Them
+                try {
+                    const firstName = finalName.split(' ')[0];
+                    const response = await fetch(`https://api.genderize.io?name=${encodeURIComponent(firstName)}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.gender === 'male') guessedGender = 'M';
+                        else if (data.gender === 'female') guessedGender = 'F';
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch gender for", finalName, e);
+                }
+
+                const newId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+                
+                students.push({
+                    id: newId,
+                    name: finalName,
+                    gender: guessedGender, 
+                    avoid: [],
+                    sitWith: []
+                });
+                addedCount++;
+                
+                // Keep UI feeling somewhat responsive
+                renderStudentList(); 
+                updateSeatCounter();
+            }
+
+            textarea.value = ''; // Clear textarea after importing
+            saveState();
+            
+            btn.innerHTML = originalBtnText;
+            btn.disabled = false;
+            showNotification(`Successfully imported ${addedCount} students.`);
+        }
+
+        function removeStudent(id) {
+            students = students.filter(s => s.id !== id);
+            students.forEach(s => {
+                s.avoid = s.avoid.filter(aid => aid !== id);
+                s.sitWith = s.sitWith.filter(sid => sid !== id);
+            });
+            renderStudentList();
+            updateSeatCounter();
+            saveState();
+        }
+
+        function renderStudentList() {
+            const list = document.getElementById('student-list');
+            list.innerHTML = '';
+            document.getElementById('student-count').innerText = students.length;
+
+            students.forEach(s => {
+                const li = document.createElement('li');
+                li.className = "flex flex-col p-3 bg-white border rounded shadow-sm relative";
+                
+                let rulesCount = s.avoid.length + s.sitWith.length + (s.frontRow ? 1 : 0);
+                let badgeHtml = '';
+                if(rulesCount > 0) {
+                    badgeHtml = `<span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full ml-2">${rulesCount} Rule${rulesCount>1?'s':''}</span>`;
+                }
+
+                li.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex flex-col gap-1">
+                            <div class="font-bold text-slate-800 flex items-center flex-wrap">
+                                <span class="text-base">${s.name}</span>
+                                ${badgeHtml}
+                            </div>
+                            <div class="flex gap-2 items-center">
+                                <select onchange="updateGender('${s.id}', this.value)" class="text-[11px] p-1 border border-slate-200 rounded bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
+                                    <option value="M" ${s.gender === 'M' ? 'selected' : ''}>He/Boy</option>
+                                    <option value="F" ${s.gender === 'F' ? 'selected' : ''}>She/Girl</option>
+                                    <option value="O" ${s.gender === 'O' ? 'selected' : ''}>They/Them</option>
+                                </select>
+                                <button onclick="openConstraintModal('${s.id}')" class="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded border border-blue-200 transition">
+                                    <i class="fa-solid fa-sliders mr-1"></i> Manage Rules
+                                </button>
+                            </div>
+                        </div>
+                        <button onclick="removeStudent('${s.id}')" class="text-slate-300 hover:text-red-500 transition p-1">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function updateGender(id, newGender) {
+            const student = students.find(s => s.id === id);
+            if (student) {
+                student.gender = newGender;
+                saveState();
+            }
+        }
+
+        // --- Advanced Constraint Modal Logic ---
+        function openConstraintModal(studentId) {
+            crCurrentStudentId = studentId;
+            const student = students.find(s => s.id === studentId);
+            if(!student) return;
+
+            document.getElementById('cr-student-name').innerText = student.name;
+            switchCrTab('avoid'); // Reset to avoid tab default
+
+            document.getElementById('constraint-overlay').classList.remove('hidden');
+        }
+
+        function closeConstraintModal() {
+            document.getElementById('constraint-overlay').classList.add('hidden');
+            crCurrentStudentId = null;
+        }
+
+        function switchCrTab(tab) {
+            crCurrentTab = tab;
+            const btnAvoid = document.getElementById('cr-tab-avoid');
+            const btnSitWith = document.getElementById('cr-tab-sitWith');
+            const btnTeacher = document.getElementById('cr-tab-teacher');
+            const listContent = document.getElementById('cr-content-list');
+            const teacherContent = document.getElementById('cr-content-teacher');
+
+            // Reset Styles
+            btnAvoid.className = "flex-1 py-2 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 transition";
+            btnSitWith.className = "flex-1 py-2 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 transition";
+            btnTeacher.className = "flex-1 py-2 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 transition";
+            
+            listContent.classList.remove('hidden');
+            teacherContent.classList.add('hidden');
+
+            const student = students.find(s => s.id === crCurrentStudentId);
+            if(!student) return;
+
+            if(tab === 'avoid') {
+                btnAvoid.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-red-100 text-red-700 transition shadow-sm";
+                populateCheckboxList('avoid');
+            } else if (tab === 'sitWith') {
+                btnSitWith.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-green-100 text-green-700 transition shadow-sm";
+                populateCheckboxList('sitWith');
+            } else if (tab === 'teacher') {
+                btnTeacher.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-blue-100 text-blue-700 transition shadow-sm";
+                listContent.classList.add('hidden');
+                teacherContent.classList.remove('hidden');
+                document.getElementById('cr-teacher-toggle').checked = student.frontRow || false;
+            }
+        }
+
+        function populateCheckboxList(type) {
+            const list = document.getElementById('cr-content-list');
+            list.innerHTML = '';
+            const student = students.find(s => s.id === crCurrentStudentId);
+            
+            const others = students.filter(s => s.id !== crCurrentStudentId);
+            if(others.length === 0) {
+                list.innerHTML = '<p class="text-sm text-slate-400 p-4 text-center">Add more students to create rules.</p>';
+                return;
+            }
+
+            others.forEach(other => {
+                const isChecked = student[type].includes(other.id);
+                // Disable checkbox if it's already selected in the OPPOSITE list
+                const oppositeType = type === 'avoid' ? 'sitWith' : 'avoid';
+                const isDisabled = student[oppositeType].includes(other.id);
+
+                const div = document.createElement('label');
+                div.className = `flex items-center p-3 border-b border-slate-100 hover:bg-slate-50 cursor-pointer ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`;
+                
+                div.innerHTML = `
+                    <input type="checkbox" class="custom-checkbox mr-4" 
+                        ${isChecked ? 'checked' : ''} 
+                        ${isDisabled ? 'disabled' : ''}
+                        onchange="toggleRule('${other.id}', '${type}', this.checked)">
+                    <div class="flex flex-col">
+                        <span class="font-semibold text-slate-700 text-sm">${other.name}</span>
+                        ${isDisabled ? `<span class="text-[10px] text-red-400">Rule conflict: Already in "${oppositeType === 'avoid' ? 'Do not sit with' : 'Must sit with'}"</span>` : ''}
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function toggleRule(targetId, type, isAdding) {
+            const source = students.find(s => s.id === crCurrentStudentId);
+            const target = students.find(s => s.id === targetId);
+            if(!source || !target) return;
+
+            if(isAdding) {
+                source[type].push(targetId);
+                target[type].push(source.id);
+            } else {
+                source[type] = source[type].filter(id => id !== targetId);
+                target[type] = target[type].filter(id => id !== source.id);
+            }
+            
+            saveState();
+            renderStudentList();
+            // Re-render list to update any disabled states if needed
+            populateCheckboxList(type); 
+        }
+
+        function toggleTeacherProximity() {
+            const student = students.find(s => s.id === crCurrentStudentId);
+            if(student) {
+                student.frontRow = document.getElementById('cr-teacher-toggle').checked;
+                saveState();
+                renderStudentList();
+            }
+        }
+
+
+        // --- Seating Generation Logic ---
+        function generateSeating() {
+            if (students.length === 0) {
+                showNotification("No students in roster!", true);
+                return;
+            }
+
+            let inventory = [];
+            let deskCounterId = 1;
+            for (let size = 1; size <= 6; size++) {
+                let qty = deskConfig[size] || 0;
+                for (let q = 0; q < qty; q++) {
+                    inventory.push({ id: deskCounterId++, capacity: size });
+                }
+            }
+
+            const totalSeats = inventory.reduce((sum, desk) => sum + desk.capacity, 0);
+            if (students.length > totalSeats) {
+                showNotification(`Not enough seats! You need ${students.length - totalSeats} more seats in your inventory.`, true);
+                return;
+            }
+
+            const strategy = document.getElementById('setting-strategy').value;
+            let assignedList = [];
+            let pool = [...students];
+            
+            // Helper function to shuffle an array for true re-rolling
+            const shuffleArray = (arr) => arr.sort(() => Math.random() - 0.5);
+
+            switch(strategy) {
+                case 'alphabetical':
+                    pool.sort((a, b) => a.name.localeCompare(b.name));
+                    break;
+                case 'reverse-alphabetical':
+                    pool.sort((a, b) => b.name.localeCompare(a.name));
+                    break;
+                case 'alternating-alphabetical':
+                    pool.sort((a, b) => a.name.localeCompare(b.name));
+                    let altAlpha = [];
+                    let left = 0;
+                    let right = pool.length - 1;
+                    while(left <= right) {
+                        if(left === right) {
+                            altAlpha.push(pool[left]);
+                        } else {
+                            altAlpha.push(pool[left]);
+                            altAlpha.push(pool[right]);
+                        }
+                        left++;
+                        right--;
+                    }
+                    pool = altAlpha;
+                    break;
+                case 'alternating-gender':
+                    // Shuffle the subgroups first so re-rolling creates a new alternating pattern every time
+                    const boys = shuffleArray(pool.filter(s => s.gender === 'M'));
+                    const girls = shuffleArray(pool.filter(s => s.gender === 'F'));
+                    const others = shuffleArray(pool.filter(s => s.gender === 'O'));
+                    let weaved = [];
+                    while(boys.length || girls.length || others.length) {
+                        if(boys.length) weaved.push(boys.shift());
+                        if(girls.length) weaved.push(girls.shift());
+                        if(others.length) weaved.push(others.shift());
+                    }
+                    pool = weaved;
+                    break;
+                case 'random':
+                default:
+                    pool = shuffleArray(pool);
+                    break;
+            }
+
+            assignedList = attemptMixedAssignment(pool, inventory);
+            
+            if(!assignedList) {
+                showNotification("Could not satisfy all matching/avoid rules! Try adjusting your constraints.", true);
+                return;
+            }
+
+            // Layout phase setup
+            activeDesks = [];
+            const marginX = 100;
+            const marginY = 120; // Extra margin at top for teacher area
+            const deskW = 240; 
+            const rowHeight = 320; 
+            const maxCols = Math.floor((1920 - marginX*2) / deskW);
+            
+            // Map chunks to inventory
+            let deskChunks = [];
+            let currentStudentIndex = 0;
+            inventory.forEach((desk) => {
+                let chunk = [];
+                for (let i = 0; i < desk.capacity; i++) {
+                    if (currentStudentIndex < assignedList.length) {
+                        chunk.push(assignedList[currentStudentIndex]);
+                        currentStudentIndex++;
+                    }
+                }
+                deskChunks.push({
+                    deskId: desk.id,
+                    capacity: desk.capacity,
+                    students: chunk
+                });
+            });
+
+            // Sorting deskChunks based on "Front Row" needs
+            // If a desk has ANY student who needs front row, we pull that desk to the front of the array.
+            deskChunks.sort((a, b) => {
+                const aNeedsFront = a.students.some(s => s.frontRow);
+                const bNeedsFront = b.students.some(s => s.frontRow);
+                if (aNeedsFront && !bNeedsFront) return -1;
+                if (!aNeedsFront && bNeedsFront) return 1;
+                return 0; // maintain original order otherwise
+            });
+
+            // Finally, map physical coordinates to the sorted chunks
+            deskChunks.forEach((chunkData, index) => {
+                const col = index % maxCols;
+                const row = Math.floor(index / maxCols);
+                
+                activeDesks.push({
+                    deskId: chunkData.deskId,
+                    studentIds: chunkData.students.map(s => s.id),
+                    x: marginX + (col * deskW),
+                    y: marginY + (row * rowHeight),
+                    capacity: chunkData.capacity
+                });
+            });
+
+            renderCanvas();
+            saveState();
+            showNotification("Seating plan generated successfully!");
+            switchView('view-app'); 
+        }
+
+        function attemptMixedAssignment(initialPool, inventory) {
+            let result = [...initialPool];
+            let maxRetries = 400; 
+            
+            let slotToDesk = [];
+            inventory.forEach(desk => {
+                for(let i=0; i<desk.capacity; i++) {
+                    slotToDesk.push(desk);
+                }
+            });
+
+            for(let retry = 0; retry < maxRetries; retry++) {
+                let valid = true;
+                
+                for(let i = 0; i < result.length; i++) {
+                    const current = result[i];
+                    const currentDesk = slotToDesk[i];
+                    
+                    for(let j = 0; j < i; j++) {
+                        if (slotToDesk[j].id === currentDesk.id) {
+                            const prev = result[j];
+                            if ((current.avoid || []).includes(prev.id) || (prev.avoid || []).includes(current.id)) {
+                                valid = false;
+                                let swapIdx = i + Math.floor(Math.random() * (result.length - i));
+                                if(swapIdx === i && i > 0) swapIdx = i - 1; 
+                                
+                                let temp = result[i];
+                                result[i] = result[swapIdx];
+                                result[swapIdx] = temp;
+                                break; 
+                            }
+                        }
+                    }
+                    if(!valid) break;
+
+                    if (current.sitWith && current.sitWith.length > 0) {
+                        for(let requiredId of current.sitWith) {
+                            let requiredIndex = result.findIndex((s, idx) => s.id === requiredId && idx < i);
+                            if (requiredIndex !== -1) {
+                                if (slotToDesk[requiredIndex].id !== currentDesk.id) {
+                                    valid = false;
+                                    let swapIdx = i + Math.floor(Math.random() * (result.length - i));
+                                    if(swapIdx === i && i > 0) swapIdx = i - 1; 
+                                    
+                                    let temp = result[i];
+                                    result[i] = result[swapIdx];
+                                    result[swapIdx] = temp;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if(!valid) break;
+                }
+                
+                if (valid) return result;
+            }
+            return null; 
+        }
+
+        // --- Canvas Rendering & Interaction ---
+        function renderCanvas() {
+            // Preserve the top gradient label
+            const headerHtml = `
+                <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-blue-100/50 to-transparent pointer-events-none flex justify-center items-start pt-4 z-0">
+                    <span class="text-blue-800/50 font-bold uppercase tracking-widest text-2xl border-b-2 border-blue-800/30 pb-1">Front of Class (Teacher)</span>
+                </div>
+            `;
+            canvas.innerHTML = headerHtml;
+            
+            activeDesks.forEach(deskData => {
+                if(!deskData.studentIds) deskData.studentIds = [];
+
+                const deskEl = document.createElement('div');
+                deskEl.className = 'desk-card z-10';
+                deskEl.dataset.deskId = deskData.deskId;
+                deskEl.style.left = deskData.x + 'px';
+                deskEl.style.top = deskData.y + 'px';
+                
+                let studentDivs = '';
+                let hasFrontRowRequest = false;
+
+                for(let i=0; i < (deskData.capacity || deskData.studentIds.length); i++) {
+                    const id = deskData.studentIds[i];
+                    const student = id ? students.find(s => s.id === id) : null;
+                    if(student && student.frontRow) hasFrontRowRequest = true;
+
+                    let rulesIcons = '';
+                    if(student) {
+                        if(student.frontRow) rulesIcons += '<i class="fa-solid fa-person-chalkboard text-blue-500 text-xs ml-1" title="Front Row"></i>';
+                        if(student.avoid.length > 0) rulesIcons += '<i class="fa-solid fa-ban text-red-500 text-xs ml-1" title="Has Avoid Rules"></i>';
+                        if(student.sitWith.length > 0) rulesIcons += '<i class="fa-solid fa-check text-green-500 text-xs ml-1" title="Has Sit With Rules"></i>';
+                    }
+
+                    const nameToDisplay = student ? `${student.name} ${rulesIcons}` : '<span class="text-slate-300 italic">Empty Seat</span>';
+                    studentDivs += `<div class="student-name py-1 flex items-center justify-center w-full border-b border-slate-100 last:border-0">${nameToDisplay}</div>`;
+                }
+
+                deskEl.innerHTML = `
+                    <div class="desk-header ${hasFrontRowRequest ? 'bg-blue-800' : ''}">
+                        <span>Desk ${deskData.deskId}</span>
+                        <span><i class="fa-solid fa-grip-vertical opacity-50"></i></span>
+                    </div>
+                    <div class="desk-body px-2">
+                        ${studentDivs}
+                    </div>
+                `;
+
+                deskEl.addEventListener('pointerdown', handleDragStart);
+                canvas.appendChild(deskEl);
+            });
+        }
+
+        function handleDragStart(e) {
+            if(e.button !== 0) return; 
+            isDragging = true;
+            dragTarget = e.currentTarget;
+            
+            const rect = dragTarget.getBoundingClientRect();
+            dragOffsetX = (e.clientX - rect.left) / currentZoom;
+            dragOffsetY = (e.clientY - rect.top) / currentZoom;
+
+            dragTarget.setPointerCapture(e.pointerId);
+            
+            dragTarget.addEventListener('pointermove', handleDragMove);
+            dragTarget.addEventListener('pointerup', handleDragEnd);
+            dragTarget.addEventListener('pointercancel', handleDragEnd);
+        }
+
+        function handleDragMove(e) {
+            if (!isDragging || !dragTarget) return;
+
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            let newX = ((e.clientX - canvasRect.left) / currentZoom) - dragOffsetX;
+            let newY = ((e.clientY - canvasRect.top) / currentZoom) - dragOffsetY;
+
+            const deskWidth = 200;
+            const deskHeight = 100;
+            newX = Math.max(0, Math.min(newX, 1920 - deskWidth));
+            newY = Math.max(0, Math.min(newY, 1080 - deskHeight));
+
+            dragTarget.style.left = newX + 'px';
+            dragTarget.style.top = newY + 'px';
+        }
+
+        function handleDragEnd(e) {
+            if (!isDragging || !dragTarget) return;
+            
+            const deskId = parseInt(dragTarget.dataset.deskId);
+            const deskState = activeDesks.find(d => d.deskId === deskId);
+            if(deskState) {
+                deskState.x = parseFloat(dragTarget.style.left);
+                deskState.y = parseFloat(dragTarget.style.top);
+            }
+
+            isDragging = false;
+            dragTarget.releasePointerCapture(e.pointerId);
+            dragTarget.removeEventListener('pointermove', handleDragMove);
+            dragTarget.removeEventListener('pointerup', handleDragEnd);
+            dragTarget.removeEventListener('pointercancel', handleDragEnd);
+            dragTarget = null;
+            
+            saveState();
+        }
+
+        function setZoom(level) {
+            currentZoom = Math.max(0.2, Math.min(level, 2));
+            canvas.style.transform = `scale(${currentZoom})`;
+        }
+        function zoom(delta) {
+            setZoom(currentZoom + delta);
+        }
+        function fitZoomToScreen() {
+            if (wrapper.clientWidth === 0) return; 
+            const scale = (wrapper.clientWidth - 40) / 1920; 
+            setZoom(scale);
+        }
+        function resetZoom() {
+            fitZoomToScreen();
+        }
+
+        // --- Export & Copy ---
+        function exportToCSV() {
+            if (activeDesks.length === 0) {
+                showNotification("No seating plan to export.", true);
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Desk Number,Student Name,Gender\n";
+
+            const sorted = [...activeDesks].sort((a,b) => a.deskId - b.deskId);
+            
+            sorted.forEach(desk => {
+                const ids = desk.studentIds || (desk.studentId ? [desk.studentId] : []);
+                ids.forEach(id => {
+                    const student = students.find(s => s.id === id);
+                    if(student) {
+                        let genderDisplay = 'They/Them';
+                        if (student.gender === 'M') genderDisplay = 'Boy';
+                        if (student.gender === 'F') genderDisplay = 'Girl';
+                        csvContent += `${desk.deskId},"${student.name}","${genderDisplay}"\n`;
+                    }
+                });
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "classroom_seating_chart.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showNotification("CSV downloaded successfully!");
+        }
+
+        function copyToClipboard() {
+            if (activeDesks.length === 0) {
+                showNotification("No seating plan to copy.", true);
+                return;
+            }
+
+            let textContent = "Classroom Seating Plan\n========================\n\n";
+            
+            const sorted = [...activeDesks].sort((a,b) => a.deskId - b.deskId);
+            
+            sorted.forEach(desk => {
+                const ids = desk.studentIds || (desk.studentId ? [desk.studentId] : []);
+                const names = ids.map(id => {
+                    const s = students.find(st => st.id === id);
+                    return s ? s.name : '';
+                }).filter(n => n).join(', ');
+                
+                textContent += `Desk ${desk.deskId}:\t${names}\n`;
+            });
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(textContent).then(() => {
+                    showNotification("Copied to clipboard! Ready to paste into Google Docs.");
+                }).catch(err => {
+                    fallbackCopyTextToClipboard(textContent);
+                });
+            } else {
+                fallbackCopyTextToClipboard(textContent);
+            }
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showNotification("Copied to clipboard! Ready to paste into Google Docs.");
+            } catch (err) {
+                showNotification("Failed to copy. Please export to CSV instead.", true);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // --- Presets ---
+        function savePreset() {
+            if(activeDesks.length === 0) return;
+            const presetName = prompt("Enter a name for this layout preset (e.g., 'Group Work', 'Testing'):");
+            if(!presetName) return;
+
+            presets[presetName] = JSON.parse(JSON.stringify(activeDesks));
+            updatePresetDropdown();
+            saveState();
+            showNotification(`Preset '${presetName}' saved!`);
+        }
+
+        function updatePresetDropdown() {
+            const selector = document.getElementById('preset-selector');
+            selector.innerHTML = '<option value="">-- Select a preset to load --</option>';
+            Object.keys(presets).forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.innerText = name;
+                selector.appendChild(opt);
+            });
+        }
+
+        function loadPreset() {
+            const presetName = document.getElementById('preset-selector').value;
+            if(!presetName || !presets[presetName]) return;
+            
+            activeDesks = JSON.parse(JSON.stringify(presets[presetName])).map(d => ({
+                ...d,
+                studentIds: d.studentIds || (d.studentId ? [d.studentId] : [])
+            }));
+            
+            renderCanvas();
+            saveState();
+            showNotification(`Preset '${presetName}' loaded!`);
+        }
+
+        // --- Utilities ---
+        function showNotification(msg, isError = false) {
+            const notif = document.getElementById('notification');
+            notif.innerText = msg;
+            notif.style.backgroundColor = isError ? '#ef4444' : '#1e293b'; 
+            
+            notif.classList.remove('translate-y-20', 'opacity-0');
+            notif.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                notif.classList.remove('translate-y-0', 'opacity-100');
+                notif.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Run on load
+        window.onload = init;
+
+    </script>
+</body>
+</html>
